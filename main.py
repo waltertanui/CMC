@@ -138,5 +138,33 @@ def enhance_latent_fingerprint(input_path, output_dir='output', patch_size=24):
     print(f"[DONE] All results saved in: {output_dir}")
 
 # --- Entry Point ---
+def process_fingerprint_with_metadata(txt_path):
+    # Parse metadata
+    with open(txt_path, 'r') as f:
+        lines = [line.strip() for line in f if line.strip()]
+    gender = lines[0].split(':')[1].strip()
+    fclass = lines[1].split(':')[1].strip()
+    history_parts = lines[2].split(':')[1].strip().split()
+    latent_img_name = history_parts[0].replace('.pct', '.png')
+    reference_img_name = history_parts[2].replace('.pct', '.png') if len(history_parts) > 2 else None
+
+    # Build image path
+    img_dir = os.path.dirname(txt_path)
+    latent_img_path = os.path.join(img_dir, latent_img_name)
+
+    # Run enhancement pipeline
+    output_dir = os.path.join(img_dir, "output_" + os.path.splitext(latent_img_name)[0])
+    enhance_latent_fingerprint(latent_img_path, output_dir=output_dir)
+
+    # Optionally, return metadata for further use
+    return {
+        "gender": gender,
+        "class": fclass,
+        "latent_img": latent_img_path,
+        "reference_img": os.path.join(img_dir, reference_img_name) if reference_img_name else None
+    }
+
+# Example usage:
 if __name__ == "__main__":
-    enhance_latent_fingerprint(r"data\example_latent.png")  # Update path as needed
+    txt_file = r"c:\Data\CMC\data\png_txt\figs_0\f0001_01.txt"
+    process_fingerprint_with_metadata(txt_file)
