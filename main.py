@@ -138,6 +138,41 @@ def enhance_latent_fingerprint(input_path, output_dir='output', patch_size=24):
     print(f"[DONE] All results saved in: {output_dir}")
 
 # --- Entry Point ---
+def match_fingerprints(enhanced_path, reference_path):
+    # Load images
+    img1 = cv2.imread(enhanced_path, cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread(reference_path, cv2.IMREAD_GRAYSCALE)
+    if img1 is None or img2 is None:
+        print(f"[ERROR] Could not load images for matching: {enhanced_path}, {reference_path}")
+        return None
+
+    # Initialize ORB detector
+    orb = cv2.ORB_create(nfeatures=5000)
+
+    # Find the keypoints and descriptors with ORB
+    kp1, des1 = orb.detectAndCompute(img1, None)
+    kp2, des2 = orb.detectAndCompute(img2, None)
+
+    if des1 is None or des2 is None:
+        print(f"[ERROR] No descriptors found in one or both images.")
+        return None
+
+    # Create BFMatcher object
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+
+    # Match descriptors
+    matches = bf.match(des1, des2)
+
+    # Sort matches by distance (lower distance is better)
+    matches = sorted(matches, key=lambda x: x.distance)
+
+    # Calculate a simple matching score: number of good matches
+    good_matches = [m for m in matches if m.distance < 50]
+    score = len(good_matches)
+    print(f"[OpenCV ORB] Matching score (good matches): {score} between {enhanced_path} and {reference_path}")
+
+    return score
+
 def process_fingerprint_with_metadata(txt_path):
     # Parse metadata
     with open(txt_path, 'r') as f:
@@ -155,6 +190,11 @@ def process_fingerprint_with_metadata(txt_path):
     # Run enhancement pipeline
     output_dir = os.path.join(img_dir, "output_" + os.path.splitext(latent_img_name)[0])
     enhance_latent_fingerprint(latent_img_path, output_dir=output_dir)
+    # After enhancement, match with reference if available
+    segmented_path = os.path.join(output_dir, "segmented.png")
+    if reference_img_name:
+        reference_img_path = os.path.join(img_dir, reference_img_name)
+        match_fingerprints(segmented_path, reference_img_path)
 
     # Optionally, return metadata for further use
     return {
@@ -164,7 +204,26 @@ def process_fingerprint_with_metadata(txt_path):
         "reference_img": os.path.join(img_dir, reference_img_name) if reference_img_name else None
     }
 
+def batch_process_all_fingerprints(root_dir):
+    """
+    Recursively process all .txt metadata files in the given root directory.
+    """
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        for filename in filenames:
+            if filename.endswith('.txt'):
+                txt_path = os.path.join(dirpath, filename)
+                print(f"[BATCH] Processing {txt_path}")
+                try:
+                    process_fingerprint_with_metadata(txt_path)
+                except Exception as e:
+                    print(f"[ERROR] Failed to process {txt_path}: {e}")
+
 # Example usage:
 if __name__ == "__main__":
-    txt_file = r"c:\Data\CMC\data\png_txt\figs_0\f0001_01.txt"
-    process_fingerprint_with_metadata(txt_file)
+    # To process a single file:
+    # txt_file = r"c:\Data\CMC\data\png_txt\figs_0\f0001_01.txt"
+    # process_fingerprint_with_metadata(txt_file)
+
+    # To process all files in the dataset:
+    batch_root = r"c:\Data\CMC\data\png_txt"
+    batch_process_all_fingerprints(batch_root)
